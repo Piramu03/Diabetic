@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block extra_css %}
+<style>
+    #cameraPreview, #capturedImage {
+        width: 100%;
+        height: 300px;
+        object-fit: cover;
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+    }
+    .camera-container {
+        position: relative;
+    }
+    .camera-buttons {
+        position: absolute;
+        bottom: 10px;
+        left: 0;
+        right: 0;
+        text-align: center;
+    }
+    #analysisResult {
+        min-height: 150px;
+    }
+    .confidence-meter {
+        height: 20px;
+        background-color: #f5f5f5;
+        border-radius: 10px;
+        margin: 10px 0;
+        overflow: hidden;
+    }
+    .confidence-fill {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }
+    .analysis-result-card {
+        border-left: 4px solid #0d6efd;
+    }
+    .no-dr-result {
+        border-left-color: #198754;
+    }
+    .dr-result {
+        border-left-color: #dc3545;
+    }
+    #uploadProgress {
+        display: none;
+        margin-top: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0"><i class="fas fa-camera me-2"></i>{% trans "Diabetic Retinopathy Detection" %}</h2>
+            </div>
+            <div class="card-body">
+                {% if message %}
+                <div class="alert alert-info">
+                    {{ message }}
+                </div>
+                {% endif %}
+                
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">
+                            <i class="fas fa-upload me-1"></i> {% trans "Upload Image" %}
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="camera-tab" data-bs-toggle="tab" data-bs-target="#camera" type="button" role="tab">
+                            <i class="fas fa-camera me-1"></i> {% trans "Use Camera" %}
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content p-4 border border-top-0 rounded-bottom" id="myTabContent">
+                    <!-- Upload Tab -->
+                    <div class="tab-pane fade show active" id="upload" role="tabpanel">
+                        <form method="post" enctype="multipart/form-data" id="uploadForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="analysis_type" value="upload">
+
+                            <!-- Country Selection -->
+                            <div class="mb-3">
+                                <label for="id_country" class="form-label">Select Your Country</label>
+                                {{ form.country }}
+                                <div class="form-text">Choose your country for personalized dietary recommendations</div>
+                            </div>
+
+                            <!-- Image Upload -->
+                            <div class="mb-3">
+                                <label for="id_image" class="form-label">Upload Retina Image</label>
+                                {{ form.image }}
+                            </div>
+
+                            <button type="submit" class="btn btn-primary mt-3">
+                                <i class="fas fa-search me-1"></i> Analyze Image
+                            </button>
+                        </form>
+                        
+                        <!-- Progress Bar -->
+                        <div id="uploadProgress" class="progress mt-3">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        
+                        <div id="uploadAnalysisResult" class="mt-4"></div>
+                    </div>
+                    
+                    <!-- Camera Tab -->
+                    <div class="tab-pane fade" id="camera" role="tabpanel">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            {% trans "Allow camera access when prompted. Ensure good lighting for best results." %}
+                        </div>
+
+                        <form id="cameraForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="analysis_type" value="camera">
+                            
+                            <div class="mb-3">
+                                <label for="camera_country" class="form-label">Select Your Country</label>
+                                <select name="country" id="camera_country" class="form-control" required>
+                                    <option value="">{% trans "-- Select Country --" %}</option>
+                                    {% for country in form.fields.country.queryset %}
+                                    <option value="{{ country.id }}">{{ country.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Choose your country for personalized dietary recommendations</div>
+                            </div>
+                        
+
+                            <div class="camera-container mb-3">
+                                <video id="cameraPreview" autoplay playsinline></video>
+                                <canvas id="captureCanvas" style="display: none;"></canvas>
+                                <div class="camera-buttons">
+                                    <button type="button" id="captureButton" class="btn btn-primary">
+                                        <i class="fas fa-camera me-1"></i> {% trans "Capture" %}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="captureResult" class="d-none">
+                                <h5>{% trans "Captured Image" %}</h5>
+                                <img id="capturedImage" class="mb-3 img-thumbnail" alt="Captured retina image">
+                                <div class="d-grid gap-2 d-md-flex">
+                                    <button type="button" id="analyzeButton" class="btn btn-success me-md-2">
+                                        <i class="fas fa-search me-1"></i> {% trans "Analyze This Image" %}
+                                    </button>
+                                    <button type="button" id="retakeButton" class="btn btn-outline-secondary">
+                                        <i class="fas fa-redo me-1"></i> {% trans "Retake" %}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="analysisResult" class="mt-4"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+// Function to get CSRF token from cookies
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.startsWith(name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Function to display analysis results
+function showAnalysisResult(container, result, stageDescription, stageNumber, stageKey, countryId,testID) {
+    const isNormal = result === 'No Diabetic Retinopathy';
+    const resultClass = isNormal ? 'no-dr-result' : 'dr-result';
+    const alertClass = isNormal ? 'alert-success' : 'alert-warning';
+    
+    container.innerHTML = `
+        <div class="card analysis-result-card ${resultClass}">
+            <div class="card-body">
+                <h4 class="card-title"><i class="fas fa-check-circle me-2"></i>Analysis Complete</h4>
+                <div class="alert ${alertClass}">
+                    <h5>${stageNumber}: ${result}</h5>
+                    <p class="mb-0">${stageDescription}</p>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <p><strong>Detected Condition:</strong> ${stageNumber} - ${result}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-primary view-recommendations-btn">
+                                <i class="fas fa-utensils me-1"></i> View Dietary Recommendations
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add event listener to the button - FIXED URL
+    container.querySelector('.view-recommendations-btn').addEventListener('click', function() {
+        // Redirect to dietary recommendations for this specific stage
+        window.location.href = '{% url "dietary_recommendations" %}?stage=' + stageKey + '&country=' + countryId;
+
+
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const video = document.getElementById('cameraPreview');
+    const captureButton = document.getElementById('captureButton');
+    const analyzeButton = document.getElementById('analyzeButton');
+    const retakeButton = document.getElementById('retakeButton');
+    const captureCanvas = document.getElementById('captureCanvas');
+    const captureResult = document.getElementById('captureResult');
+    const capturedImage = document.getElementById('capturedImage');
+    const analysisResult = document.getElementById('analysisResult');
+    const cameraCountry = document.getElementById('camera_country');
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadAnalysisResult = document.getElementById('uploadAnalysisResult');
+    const uploadCountry = document.getElementById('id_country');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const progressBar = document.querySelector('.progress-bar');
+
+    let stream = null;
+    let capturedImageData = null;
+
+    // Handle upload form submission with AJAX
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (!uploadCountry.value) {
+            alert("Please select your country before analyzing.");
+            return;
+        }
+        
+        const imageInput = document.getElementById('id_image');
+        if (!imageInput.files || !imageInput.files[0]) {
+            alert("Please select an image to upload.");
+            return;
+        }
+        
+        // Check file size (max 10MB)
+        const fileSize = imageInput.files[0].size / 1024 / 1024;
+        if (fileSize > 10) {
+            alert("File size exceeds 10MB. Please choose a smaller image.");
+            return;
+        }
+        
+        // Show loading state
+        uploadAnalysisResult.innerHTML = `
+            <div class="alert alert-info d-flex align-items-center">
+                <i class="fas fa-spinner fa-spin me-2 fa-2x"></i>
+                <div>
+                    <h5>Analyzing Image...</h5>
+                    <p class="mb-0">Please wait while we process your retina image.</p>
+                </div>
+            </div>
+        `;
+        
+        // Submit the form asynchronously
+        const formData = new FormData(uploadForm);
+        const csrftoken = getCookie('csrftoken');
+        
+        fetch('{% url "detect_retinopathy" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.result) {
+                // Store results in session storage for the recommendations page
+                sessionStorage.setItem('analysisResult', JSON.stringify({
+                    condition: data.result,
+                    stage_description: data.stage_description,
+                    stage_number: data.stage_number,
+                    stage_key: data.stage_key,
+                    country_id: data.country_id || uploadCountry.value
+                }));
+                
+                // Show the results
+                showAnalysisResult(
+                    uploadAnalysisResult, 
+                    data.result, 
+                    data.stage_description, 
+                    data.stage_number, 
+                    data.stage_key, 
+                    data.country_id || uploadCountry.value,
+                    data.test_id
+
+                );
+            } else {
+                uploadAnalysisResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h4><i class="fas fa-exclamation-triangle me-2"></i>Analysis Failed</h4>
+                        <p>${data.message || "Error analyzing image. Please try again with a clearer image."}</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            uploadAnalysisResult.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4><i class="fas fa-exclamation-triangle me-2"></i>Request Error</h4>
+                    <p>There was a problem with your request. Please try again.</p>
+                    <p class="small">${error.message}</p>
+                </div>
+            `;
+        });
+    });
+
+    // Camera tab functionality
+    document.getElementById('camera-tab').addEventListener('click', function() {
+        if (!stream) startCamera();
+    });
+
+    function startCamera() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(function(mediaStream) {
+                stream = mediaStream;
+                video.srcObject = mediaStream;
+                video.play();
+            })
+            .catch(function(error) {
+                console.error("Error accessing camera:", error);
+                alert("Unable to access camera. Please check permissions.");
+            });
+        } else {
+            alert("Your browser does not support camera access.");
+        }
+    }
+
+    captureButton.addEventListener('click', function() {
+        const context = captureCanvas.getContext('2d');
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+        capturedImageData = captureCanvas.toDataURL('image/png');
+        capturedImage.src = capturedImageData;
+
+        video.classList.add('d-none');
+        captureButton.classList.add('d-none');
+        captureResult.classList.remove('d-none');
+
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+    });
+
+    retakeButton.addEventListener('click', function() {
+        capturedImageData = null;
+        capturedImage.src = '';
+        captureResult.classList.add('d-none');
+        video.classList.remove('d-none');
+        captureButton.classList.remove('d-none');
+        analysisResult.innerHTML = '';
+        startCamera();
+    });
+
+    analyzeButton.addEventListener('click', function() {
+        if (!capturedImageData) return;
+        if (!cameraCountry.value) {
+            alert("Please select your country before analyzing.");
+            return;
+        }
+
+        analysisResult.innerHTML = `
+            <div class="alert alert-info d-flex align-items-center">
+                <i class="fas fa-spinner fa-spin me-2 fa-2x"></i>
+                <div>
+                    <h5>Analyzing Image...</h5>
+                    <p class="mb-0">Please wait while we process your retina image.</p>
+                </div>
+            </div>
+        `;
+
+        const csrftoken = getCookie('csrftoken');
+
+        fetch('{% url "detect_retinopathy" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                'image_data': capturedImageData,
+                'country': cameraCountry.value,
+                'analysis_type': 'camera'
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.result) {
+                // Store results in session storage for the recommendations page
+                sessionStorage.setItem('analysisResult', JSON.stringify({
+                    condition: data.result,
+                    stage_description: data.stage_description,
+                    stage_number: data.stage_number,
+                    stage_key: data.stage_key,
+                    country_id: data.country_id || cameraCountry.value
+                }));
+                
+                // Show the results
+                showAnalysisResult(
+                    analysisResult, 
+                    data.result, 
+                    data.stage_description, 
+                    data.stage_number, 
+                    data.stage_key, 
+                    data.country_id || cameraCountry.value
+                );
+            } else {
+                analysisResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h4><i class="fas fa-exclamation-triangle me-2"></i>Analysis Failed</h4>
+                        <p>${data.message || "Error analyzing image. Please try again with a clearer image."}</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            analysisResult.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4><i class="fas fa-exclamation-triangle me-2"></i>Network Error</h4>
+                    <p>Unable to connect to the server. Please check your internet connection and try again.</p>
+                    <p class="small">Error details: ${error.message}</p>
+                </div>
+            `;
+        });
+    });
+
+    // Clean up when leaving page
+    window.addEventListener('beforeunload', function() {
+        if (stream) stream.getTracks().forEach(track => track.stop());
+    });
+
+    // Clean up when switching tabs
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('show.bs.tab', function() {
+            if (stream && this.getAttribute('href') !== '#camera') {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

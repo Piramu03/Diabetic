@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0"><i class="fas fa-utensils me-2"></i>Dietary Recommendations</h2>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    These dietary recommendations are based on your detected stage of diabetic retinopathy. 
+                    Always consult with a healthcare professional for personalized advice.
+                </div>
+
+                {% if diet_recommendation %}
+                <div class="accordion" id="dietAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading1">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse1">
+                                <strong>{{ condition_name }}</strong>
+                            </button>
+                        </h2>
+                        <div id="collapse1" class="accordion-collapse collapse show" data-bs-parent="#dietAccordion">
+                            <div class="accordion-body">
+                                <div class="alert alert-secondary">
+                                    <strong>General Advice:</strong> {{ diet_recommendation.general_advice }}
+                                </div>
+
+                                <h5>🍽️ Foods to Eat (Timing Based):</h5>
+                                <div class="card mb-3">
+                                    <div class="card-header bg-success text-white">
+                                        <i class="fas fa-sun me-2"></i>Morning (7-9 AM) - Breakfast
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-0">{{ diet_recommendation.morning_foods }}</p>
+                                    </div>
+                                </div>
+                                <div class="card mb-3">
+                                    <div class="card-header bg-warning text-dark">
+                                        <i class="fas fa-utensils me-2"></i>Midday (12-2 PM) - Lunch
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-0">{{ diet_recommendation.midday_foods }}</p>
+                                    </div>
+                                </div>
+                                <div class="card mb-3">
+                                    <div class="card-header bg-info text-white">
+                                        <i class="fas fa-moon me-2"></i>Evening (7-9 PM) - Dinner
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-0">{{ diet_recommendation.evening_foods }}</p>
+                                    </div>
+                                </div>
+                                <div class="card mb-3">
+                                    <div class="card-header bg-secondary text-white">
+                                        <i class="fas fa-coffee me-2"></i>Snacks (10-11 AM, 4-5 PM)
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-0">{{ diet_recommendation.snack_foods }}</p>
+                                    </div>
+                                </div>
+
+                                <h5>🚫 Foods to Avoid:</h5>
+                                <div class="alert alert-danger">
+                                    <p class="mb-0">{{ diet_recommendation.foods_to_avoid }}</p>
+                                </div>
+
+                                <h5>💧 Hydration Guidelines:</h5>
+                                <div class="alert alert-primary">
+                                    <p class="mb-0">{{ diet_recommendation.hydration }}</p>
+                                </div>
+
+                                <h5>👁️ Eye Exercises:</h5>
+                                <div class="alert alert-success">
+                                    <p class="mb-0">{{ diet_recommendation.eye_exercises }}</p>
+                                </div>
+
+                                <h5>🧴 Eye Care Recommendations:</h5>
+                                <div class="alert alert-info">
+                                    <p class="mb-0">{{ diet_recommendation.eye_care }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    No dietary recommendations available for this stage. Please consult with a healthcare professional.
+                </div>
+                {% endif %}
+
+                <div class="mt-4">
+                    <a href="{% url 'detect_retinopathy' %}" class="btn btn-primary">
+                        <i class="fas fa-camera me-1"></i> Detect Again
+                    </a>
+                    <a href="{% url 'test_history' %}" class="btn btn-outline-secondary ms-2">
+                        <i class="fas fa-history me-1"></i> Test History
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
